@@ -1,0 +1,744 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Tile Match Puzzle - 100 Niveaux</title>
+    <style>
+        * {
+            box-sizing: border-box;
+            user-select: none;
+        }
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: #1a1a2e;
+            color: #fff;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+            margin: 0;
+            overflow: hidden;
+        }
+        h1 { margin-bottom: 5px; text-shadow: 0 2px 8px rgba(0,0,0,0.5); font-size: 1.5rem; }
+        
+        .dashboard {
+            display: flex;
+            gap: 10px;
+            font-size: 0.9rem;
+            margin-bottom: 12px;
+            background: #16213e;
+            padding: 8px 14px;
+            border-radius: 20px;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.3);
+            align-items: center;
+            flex-wrap: wrap;
+            justify-content: center;
+        }
+        .stat { display: flex; align-items: center; gap: 4px; }
+        .timer-frozen { color: #00d2d3; font-weight: bold; }
+        .level-badge { 
+            background: #e94560; 
+            padding: 2px 10px; 
+            border-radius: 10px; 
+            font-weight: bold; 
+            cursor: pointer;
+            transition: transform 0.1s;
+        }
+        .level-badge:active { transform: scale(0.95); }
+        
+        .combo-badge {
+            background: #f1c40f;
+            color: #1a1a2e;
+            padding: 2px 8px;
+            border-radius: 12px;
+            font-weight: bold;
+            display: none;
+            animation: pop 0.3s ease;
+        }
+        .combo-badge.active { display: inline-block; }
+
+        #game-container { position: relative; }
+        #game-container.shake { animation: shake 0.3s ease-in-out; }
+
+        #grid {
+            display: grid;
+            grid-template-columns: repeat(6, 55px);
+            grid-template-rows: repeat(6, 55px);
+            gap: 8px;
+            background: #16213e;
+            padding: 12px;
+            border-radius: 12px;
+            box-shadow: 0 8px 20px rgba(0,0,0,0.4);
+            position: relative;
+        }
+        .tile {
+            width: 55px;
+            height: 55px;
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.8rem;
+            cursor: pointer;
+            transition: transform 0.15s ease, background 0.2s, opacity 0.2s;
+            background: #0f3460;
+        }
+        .tile.selected {
+            outline: 3px solid #e94560;
+            transform: scale(1.08);
+            background: #533483;
+        }
+        .tile.joker {
+            background: #f1c40f;
+            box-shadow: 0 0 10px #f1c40f;
+        }
+        .tile.empty { opacity: 0.1; }
+
+        .powerups {
+            display: flex;
+            gap: 8px;
+            margin-top: 15px;
+            flex-wrap: wrap;
+            justify-content: center;
+        }
+        .powerup-btn {
+            background: #0f3460;
+            border: 2px solid #e94560;
+            color: white;
+            padding: 8px 12px;
+            border-radius: 12px;
+            font-size: 0.85rem;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            transition: transform 0.1s, background 0.2s;
+        }
+        .powerup-btn:active { transform: scale(0.95); }
+        .powerup-btn.active { background: #e94560; }
+        .powerup-btn.blue { border-color: #00d2d3; }
+        .powerup-btn.blue.active { background: #00d2d3; }
+        .powerup-btn.purple { border-color: #9b59b6; }
+
+        @keyframes shake {
+            0% { transform: translate(0, 0); }
+            20% { transform: translate(-6px, 4px); }
+            40% { transform: translate(6px, -4px); }
+            60% { transform: translate(-4px, -2px); }
+            80% { transform: translate(4px, 2px); }
+            100% { transform: translate(0, 0); }
+        }
+        @keyframes pop {
+            0% { transform: scale(0.5); }
+            100% { transform: scale(1); }
+        }
+
+        .modal {
+            display: none;
+            position: absolute;
+            top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0,0,0,0.92);
+            border-radius: 12px;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            z-index: 10;
+            text-align: center;
+            padding: 15px;
+        }
+        .modal.active { display: flex; }
+        
+        .btn-modal {
+            margin-top: 15px;
+            padding: 10px 24px;
+            font-size: 1rem;
+            font-weight: bold;
+            background: #e94560;
+            color: white;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+        }
+        .btn-modal.next { background: #2ecc71; }
+
+        /* Grille du choix de niveau */
+        .level-grid {
+            display: grid;
+            grid-template-columns: repeat(5, 1fr);
+            gap: 8px;
+            max-height: 250px;
+            overflow-y: auto;
+            width: 100%;
+            padding: 5px;
+        }
+        .level-btn {
+            background: #0f3460;
+            border: 1px solid #e94560;
+            color: #fff;
+            padding: 8px 0;
+            border-radius: 6px;
+            font-weight: bold;
+            cursor: pointer;
+            font-size: 0.85rem;
+        }
+        .level-btn.unlocked {
+            background: #2ecc71;
+            border-color: #27ae60;
+        }
+        .level-btn.locked {
+            background: #333;
+            border-color: #555;
+            color: #777;
+            cursor: not-allowed;
+        }
+        .level-btn.current {
+            outline: 2px solid #fff;
+        }
+    </style>
+</head>
+<body>
+
+    <h1>Tile Match Ultimate</h1>
+    <div class="dashboard">
+        <div class="level-badge" onclick="openLevelSelector()">🗺️ Niv. <span id="level">1</span></div>
+        <div class="stat">🎯 <span id="matches-left">0</span></div>
+        <div class="stat">⭐ <span id="score">0</span></div>
+        <div class="stat" id="timer-box">⏳ <span id="timer">60</span>s</div>
+        <div class="combo-badge" id="combo-badge">x<span id="combo-val">1</span></div>
+    </div>
+
+    <div id="game-container">
+        <div id="grid">
+            <!-- Modal Fin de Niveau / GameOver -->
+            <div id="game-modal" class="modal">
+                <h2 id="modal-title">Niveau Réussi !</h2>
+                <p id="modal-desc">Prêt pour le niveau suivant ?</p>
+                <button class="btn-modal" id="modal-btn" onclick="handleModalAction()">Continuer</button>
+            </div>
+
+            <!-- Modal Sélection de Niveau -->
+            <div id="level-modal" class="modal">
+                <h2>Choisir un Niveau</h2>
+                <div class="level-grid" id="level-grid"></div>
+                <button class="btn-modal" onclick="closeLevelSelector()">Fermer</button>
+            </div>
+        </div>
+    </div>
+
+    <div class="powerups">
+        <button class="powerup-btn" id="btn-bomb" onclick="toggleBombMode()">
+            💣 Bombe (<span id="bomb-count">2</span>)
+        </button>
+        <button class="powerup-btn blue" id="btn-freeze" onclick="useFreeze()">
+            ❄️ Gel (<span id="freeze-count">1</span>)
+        </button>
+        <button class="powerup-btn purple" id="btn-shuffle" onclick="useShuffle()">
+            🔄 Mélanger (<span id="shuffle-count">2</span>)
+        </button>
+    </div>
+
+    <script>
+        const GRID_SIZE = 6;
+        const ICONS = ['🍎', '🍌', '🍇', '🍊', '🍓', '🥑'];
+        const JOKER = '🌟';
+
+        const gridElement = document.getElementById('grid');
+        const containerElement = document.getElementById('game-container');
+        const levelElement = document.getElementById('level');
+        const matchesLeftElement = document.getElementById('matches-left');
+        const scoreElement = document.getElementById('score');
+        const timerElement = document.getElementById('timer');
+        const timerBox = document.getElementById('timer-box');
+        const comboBadge = document.getElementById('combo-badge');
+        const comboVal = document.getElementById('combo-val');
+        
+        const bombCountElement = document.getElementById('bomb-count');
+        const freezeCountElement = document.getElementById('freeze-count');
+        const shuffleCountElement = document.getElementById('shuffle-count');
+        
+        const btnBomb = document.getElementById('btn-bomb');
+        const btnFreeze = document.getElementById('btn-freeze');
+        
+        const gameModal = document.getElementById('game-modal');
+        const modalTitle = document.getElementById('modal-title');
+        const modalDesc = document.getElementById('modal-desc');
+        const modalBtn = document.getElementById('modal-btn');
+
+        const levelModal = document.getElementById('level-modal');
+        const levelGrid = document.getElementById('level-grid');
+
+        let board = [];
+        let selectedTile = null;
+        let score = 0;
+        let currentLevel = 1;
+        let maxUnlockedLevel = parseInt(localStorage.getItem('tile_match_max_level')) || 1;
+        let targetMatches = 0;
+        let matchesRemaining = 0;
+        let timeLeft = 60;
+        let timerInterval = null;
+        let isProcessing = false;
+        let comboMultiplier = 1;
+        
+        let bombsAvailable = 2;
+        let bombModeActive = false;
+        let freezeAvailable = 1;
+        let shuffleAvailable = 2;
+        let isTimerFrozen = false;
+        let isWinState = false;
+
+        // --- MOTEUR SONORE ---
+        let audioCtx = null;
+
+        function getAudioContext() {
+            if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+            if (audioCtx.state === 'suspended') audioCtx.resume();
+            return audioCtx;
+        }
+
+        function playSound(type, pitch = 1) {
+            try {
+                const ctx = getAudioContext();
+                const osc = ctx.createOscillator();
+                const gain = ctx.createGain();
+                osc.connect(gain);
+                gain.connect(ctx.destination);
+                const now = ctx.currentTime;
+
+                if (type === 'select') {
+                    osc.type = 'sine';
+                    osc.frequency.setValueAtTime(400 * pitch, now);
+                    gain.gain.setValueAtTime(0.1, now);
+                    gain.gain.exponentialRampToValueAtTime(0.01, now + 0.08);
+                    osc.start(now); osc.stop(now + 0.08);
+                } else if (type === 'match') {
+                    osc.type = 'triangle';
+                    osc.frequency.setValueAtTime(523.25 * pitch, now);
+                    osc.frequency.setValueAtTime(659.25 * pitch, now + 0.08);
+                    gain.gain.setValueAtTime(0.2, now);
+                    gain.gain.exponentialRampToValueAtTime(0.01, now + 0.25);
+                    osc.start(now); osc.stop(now + 0.25);
+                } else if (type === 'bomb') {
+                    osc.type = 'sawtooth';
+                    osc.frequency.setValueAtTime(150, now);
+                    osc.frequency.exponentialRampToValueAtTime(30, now + 0.4);
+                    gain.gain.setValueAtTime(0.3, now);
+                    gain.gain.exponentialRampToValueAtTime(0.01, now + 0.4);
+                    osc.start(now); osc.stop(now + 0.4);
+                } else if (type === 'freeze') {
+                    osc.type = 'sine';
+                    osc.frequency.setValueAtTime(800, now);
+                    osc.frequency.linearRampToValueAtTime(1200, now + 0.3);
+                    gain.gain.setValueAtTime(0.15, now);
+                    gain.gain.exponentialRampToValueAtTime(0.01, now + 0.3);
+                    osc.start(now); osc.stop(now + 0.3);
+                } else if (type === 'shuffle') {
+                    osc.type = 'sine';
+                    osc.frequency.setValueAtTime(300, now);
+                    osc.frequency.linearRampToValueAtTime(150, now + 0.2);
+                    gain.gain.setValueAtTime(0.15, now);
+                    gain.gain.exponentialRampToValueAtTime(0.01, now + 0.25);
+                    osc.start(now); osc.stop(now + 0.25);
+                } else if (type === 'win') {
+                    osc.type = 'sine';
+                    osc.frequency.setValueAtTime(440, now);
+                    osc.frequency.setValueAtTime(554.37, now + 0.1);
+                    osc.frequency.setValueAtTime(659.25, now + 0.2);
+                    gain.gain.setValueAtTime(0.2, now);
+                    gain.gain.exponentialRampToValueAtTime(0.01, now + 0.5);
+                    osc.start(now); osc.stop(now + 0.5);
+                } else if (type === 'gameover') {
+                    osc.type = 'sawtooth';
+                    osc.frequency.setValueAtTime(300, now);
+                    osc.frequency.linearRampToValueAtTime(100, now + 0.6);
+                    gain.gain.setValueAtTime(0.2, now);
+                    gain.gain.exponentialRampToValueAtTime(0.01, now + 0.6);
+                    osc.start(now); osc.stop(now + 0.6);
+                }
+            } catch (e) {}
+        }
+
+        // --- GESTION DE LA SÉLECTION DES NIVEAUX ---
+        function openLevelSelector() {
+            clearInterval(timerInterval);
+            levelGrid.innerHTML = '';
+
+            for (let i = 1; i <= 100; i++) {
+                const btn = document.createElement('button');
+                btn.classList.add('level-btn');
+                
+                if (i <= maxUnlockedLevel) {
+                    btn.classList.add('unlocked');
+                    btn.textContent = i;
+                    if (i === currentLevel) btn.classList.add('current');
+                    btn.onclick = () => selectLevel(i);
+                } else {
+                    btn.classList.add('locked');
+                    btn.textContent = '🔒';
+                }
+                levelGrid.appendChild(btn);
+            }
+            levelModal.classList.add('active');
+        }
+
+        function closeLevelSelector() {
+            levelModal.classList.remove('active');
+            // Reprendre le chrono s'il restait du temps
+            if (timeLeft > 0 && !gameModal.classList.contains('active')) {
+                clearInterval(timerInterval);
+                timerInterval = setInterval(() => {
+                    if (!isTimerFrozen) {
+                        timeLeft--;
+                        timerElement.textContent = timeLeft;
+                        if (timeLeft <= 0) endGame(false);
+                    }
+                }, 1000);
+            }
+        }
+
+        function selectLevel(lvl) {
+            currentLevel = lvl;
+            levelModal.classList.remove('active');
+            score = 0;
+            startLevel();
+        }
+
+        // --- CONFIGURATION DU NIVEAU ---
+        function loadLevelConfig(lvl) {
+            targetMatches = Math.min(60, 5 + Math.floor(lvl * 0.55));
+            matchesRemaining = targetMatches;
+            timeLeft = Math.max(25, 65 - Math.floor(lvl * 0.35));
+        }
+
+        function startLevel() {
+            loadLevelConfig(currentLevel);
+
+            bombModeActive = false;
+            isTimerFrozen = false;
+            comboMultiplier = 1;
+            isProcessing = false;
+
+            levelElement.textContent = currentLevel;
+            matchesLeftElement.textContent = matchesRemaining;
+            scoreElement.textContent = score;
+            timerElement.textContent = timeLeft;
+            
+            bombCountElement.textContent = bombsAvailable;
+            freezeCountElement.textContent = freezeAvailable;
+            shuffleCountElement.textContent = shuffleAvailable;
+            
+            btnBomb.classList.remove('active');
+            btnFreeze.classList.remove('active');
+            timerBox.classList.remove('timer-frozen');
+            comboBadge.classList.remove('active');
+            gameModal.classList.remove('active');
+
+            clearInterval(timerInterval);
+            initBoard();
+
+            timerInterval = setInterval(() => {
+                if (!isTimerFrozen) {
+                    timeLeft--;
+                    timerElement.textContent = timeLeft;
+                    if (timeLeft <= 0) endGame(false);
+                }
+            }, 1000);
+        }
+
+        function endGame(isWin) {
+            clearInterval(timerInterval);
+            isWinState = isWin;
+
+            if (isWin) {
+                playSound('win');
+                modalTitle.textContent = "Niveau " + currentLevel + " Réussi ! 🎉";
+                modalDesc.textContent = "Objectif atteint ! Prêt pour la suite ?";
+                modalBtn.textContent = "Niveau Suivant";
+                modalBtn.className = "btn-modal next";
+
+                // Déblocage du niveau suivant
+                if (currentLevel + 1 > maxUnlockedLevel) {
+                    maxUnlockedLevel = currentLevel + 1;
+                    localStorage.setItem('tile_match_max_level', maxUnlockedLevel);
+                }
+
+                // Bonus de récompenses
+                if (currentLevel % 3 === 0) bombsAvailable++;
+                if (currentLevel % 4 === 0) freezeAvailable++;
+                if (currentLevel % 2 === 0) shuffleAvailable++;
+
+                currentLevel++;
+                if (currentLevel > 100) {
+                    modalTitle.textContent = "🏆 JEU TERMINÉ ! 🏆";
+                    modalDesc.textContent = "Bravo, tu as réussi les 100 niveaux !";
+                    modalBtn.textContent = "Recommencer";
+                    currentLevel = 1;
+                }
+            } else {
+                playSound('gameover');
+                modalTitle.textContent = "Temps Écoulé ! 💥";
+                modalDesc.textContent = "Niveau " + currentLevel + " échoué. Réessaie !";
+                modalBtn.textContent = "Réessayer";
+                modalBtn.className = "btn-modal";
+            }
+
+            gameModal.classList.add('active');
+        }
+
+        function handleModalAction() {
+            if (!isWinState) score = 0;
+            startLevel();
+        }
+
+        function initBoard() {
+            gridElement.querySelectorAll('.tile').forEach(t => t.remove());
+            board = [];
+            for (let r = 0; r < GRID_SIZE; r++) {
+                board[r] = [];
+                for (let c = 0; c < GRID_SIZE; c++) {
+                    board[r][c] = getRandomIcon();
+
+                    const tile = document.createElement('div');
+                    tile.classList.add('tile');
+                    tile.dataset.row = r;
+                    tile.dataset.col = c;
+                    tile.addEventListener('click', onTileClick);
+                    gridElement.appendChild(tile);
+                }
+            }
+            renderBoard();
+            checkMatches(false);
+        }
+
+        function getRandomIcon(allowJoker = false) {
+            if (allowJoker && Math.random() < 0.05) return JOKER;
+            return ICONS[Math.floor(Math.random() * ICONS.length)];
+        }
+
+        function toggleBombMode() {
+            if (bombsAvailable <= 0 || isProcessing) return;
+            playSound('select');
+            bombModeActive = !bombModeActive;
+            btnBomb.classList.toggle('active', bombModeActive);
+        }
+
+        function useFreeze() {
+            if (freezeAvailable <= 0 || isTimerFrozen || isProcessing) return;
+            playSound('freeze');
+            freezeAvailable--;
+            freezeCountElement.textContent = freezeAvailable;
+            isTimerFrozen = true;
+            timerBox.classList.add('timer-frozen');
+
+            setTimeout(() => {
+                isTimerFrozen = false;
+                timerBox.classList.remove('timer-frozen');
+            }, 8000);
+        }
+
+        async function useShuffle() {
+            if (shuffleAvailable <= 0 || isProcessing) return;
+            playSound('shuffle');
+            
+            isProcessing = true;
+            shuffleAvailable--;
+            shuffleCountElement.textContent = shuffleAvailable;
+
+            for (let r = 0; r < GRID_SIZE; r++) {
+                for (let c = 0; c < GRID_SIZE; c++) {
+                    let randR = Math.floor(Math.random() * GRID_SIZE);
+                    let randC = Math.floor(Math.random() * GRID_SIZE);
+                    let temp = board[r][c];
+                    board[r][c] = board[randR][randC];
+                    board[randR][randC] = temp;
+                }
+            }
+            renderBoard();
+            
+            await checkMatches(false);
+            isProcessing = false;
+        }
+
+        async function onTileClick(e) {
+            if (isProcessing || timeLeft <= 0) return;
+
+            const tile = e.currentTarget;
+            const r = parseInt(tile.dataset.row);
+            const c = parseInt(tile.dataset.col);
+
+            if (bombModeActive) {
+                useBomb(r, c);
+                return;
+            }
+
+            if (!selectedTile) {
+                playSound('select');
+                selectedTile = { r, c, element: tile };
+                tile.classList.add('selected');
+            } else {
+                const isAdjacent = (Math.abs(selectedTile.r - r) + Math.abs(selectedTile.c - c)) === 1;
+
+                if (isAdjacent) {
+                    isProcessing = true;
+                    comboMultiplier = 1;
+                    swapTiles(selectedTile.r, selectedTile.c, r, c);
+                    
+                    let hasMatch = await checkMatches(true);
+                    
+                    if (!hasMatch) {
+                        await delay(200);
+                        swapTiles(selectedTile.r, selectedTile.c, r, c);
+                    }
+                    isProcessing = false;
+                }
+
+                selectedTile.element.classList.remove('selected');
+                selectedTile = null;
+            }
+        }
+
+        async function useBomb(r, c) {
+            isProcessing = true;
+            bombModeActive = false;
+            bombsAvailable--;
+            btnBomb.classList.remove('active');
+            bombCountElement.textContent = bombsAvailable;
+
+            playSound('bomb');
+            triggerScreenShake();
+
+            for (let i = Math.max(0, r - 1); i <= Math.min(GRID_SIZE - 1, r + 1); i++) {
+                for (let j = Math.max(0, c - 1); j <= Math.min(GRID_SIZE - 1, c + 1); j++) {
+                    board[i][j] = '';
+                }
+            }
+
+            score += 50;
+            scoreElement.textContent = score;
+            renderBoard();
+
+            await delay(250);
+            applyGravity();
+            renderBoard();
+
+            await delay(250);
+            await checkMatches(true);
+            isProcessing = false;
+        }
+
+        function triggerScreenShake() {
+            containerElement.classList.add('shake');
+            setTimeout(() => containerElement.classList.remove('shake'), 300);
+        }
+
+        function swapTiles(r1, c1, r2, c2) {
+            let temp = board[r1][c1];
+            board[r1][c1] = board[r2][c2];
+            board[r2][c2] = temp;
+            renderBoard();
+        }
+
+        function renderBoard() {
+            const tiles = gridElement.querySelectorAll('.tile');
+            tiles.forEach(tile => {
+                const r = tile.dataset.row;
+                const c = tile.dataset.col;
+                const val = board[r][c];
+                tile.textContent = val || '';
+                tile.className = 'tile' + (val === '' ? ' empty' : '') + (val === JOKER ? ' joker' : '');
+            });
+        }
+
+        function isMatch(a, b, c) {
+            if (!a || !b || !c) return false;
+            let nonJoker = [a, b, c].find(v => v !== JOKER);
+            if (!nonJoker) return true;
+            return (a === nonJoker || a === JOKER) &&
+                   (b === nonJoker || b === JOKER) &&
+                   (c === nonJoker || c === JOKER);
+        }
+
+        async function checkMatches(givePoints = true) {
+            let matched = [];
+
+            for (let r = 0; r < GRID_SIZE; r++) {
+                for (let c = 0; c < GRID_SIZE - 2; c++) {
+                    if (isMatch(board[r][c], board[r][c+1], board[r][c+2])) {
+                        matched.push({r, c}, {r, c: c+1}, {r, c: c+2});
+                    }
+                }
+            }
+
+            for (let r = 0; r < GRID_SIZE - 2; r++) {
+                for (let c = 0; c < GRID_SIZE; c++) {
+                    if (isMatch(board[r][c], board[r+1][c], board[r+2][c])) {
+                        matched.push({r, c}, {r: r+1, c}, {r: r+2, c});
+                    }
+                }
+            }
+
+            if (matched.length > 0) {
+                if (givePoints) {
+                    playSound('match', 1 + (comboMultiplier - 1) * 0.15);
+                    score += matched.length * 10 * comboMultiplier;
+                    scoreElement.textContent = score;
+
+                    matchesRemaining--;
+                    if (matchesRemaining < 0) matchesRemaining = 0;
+                    matchesLeftElement.textContent = matchesRemaining;
+
+                    if (comboMultiplier > 1) {
+                        comboVal.textContent = comboMultiplier;
+                        comboBadge.classList.add('active');
+                        triggerScreenShake();
+                    }
+                }
+
+                matched.forEach(pos => board[pos.r][pos.c] = '');
+                renderBoard();
+
+                await delay(250);
+                applyGravity();
+                renderBoard();
+
+                if (givePoints && matchesRemaining <= 0) {
+                    endGame(true);
+                    return true;
+                }
+
+                await delay(250);
+                comboMultiplier++;
+                await checkMatches(givePoints);
+                return true;
+            } else {
+                comboBadge.classList.remove('active');
+            }
+            return false;
+        }
+
+        function applyGravity() {
+            for (let c = 0; c < GRID_SIZE; c++) {
+                let emptyRow = GRID_SIZE - 1;
+                for (let r = GRID_SIZE - 1; r >= 0; r--) {
+                    if (board[r][c] !== '') {
+                        board[emptyRow][c] = board[r][c];
+                        if (emptyRow !== r) board[r][c] = '';
+                        emptyRow--;
+                    }
+                }
+                for (let r = emptyRow; r >= 0; r--) {
+                    board[r][c] = getRandomIcon(true);
+                }
+            }
+        }
+
+        function delay(ms) {
+            return new Promise(resolve => setTimeout(resolve, ms));
+        }
+
+        currentLevel = maxUnlockedLevel;
+        startLevel();
+    </script>
+</body>
+</html>
